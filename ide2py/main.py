@@ -492,7 +492,7 @@ class PyAUIFrame(aui.AuiMDIParentFrame, Web2pyMixin, PSPMixin, RepoMixin):
             cwd = os.getcwd()
             try:
                 # change to script directory
-                os.chdir(syspath[0])                 
+                os.chdir(syspath[0])
                 # create a code objectbject and run it in the main thread
                 code = self.active_child.GetCodeObject()
                 filename = os.path.split(self.active_child.GetFilename())[1]
@@ -502,7 +502,10 @@ class PyAUIFrame(aui.AuiMDIParentFrame, Web2pyMixin, PSPMixin, RepoMixin):
                     # set program arguments (workaround shlex unicode bug)
                     args = self.lastprogargs.encode("ascii", "ignore")
                     sys.argv = [filename] + shlex.split(args)
-                    self.shell.RunScript(code, syspath, debug and self.debugger, self.console)
+                    self.shell.RunScript(code, syspath, 
+                                         debug and self.debugger, 
+                                         self.console,
+                                         )
                 self.statusbar.SetStatusText("", 1)
             finally:
                 os.chdir(cwd)
@@ -711,12 +714,14 @@ class PyAUIFrame(aui.AuiMDIParentFrame, Web2pyMixin, PSPMixin, RepoMixin):
         if self.active_child:
             self.active_child.OnEditAction(event)
 
-    def ExceptHook(self, type, value, trace): 
-        exc = traceback.format_exception(type, value, trace) 
+    def ExceptHook(self, extype, exvalue, trace): 
+        exc = traceback.format_exception(extype, exvalue, trace) 
         #for e in exc: wx.LogError(e) 
         # format exception message
-        title = traceback.format_exception_only(type, value)[0]
-        msg = ''.join(traceback.format_exception(type, value, trace))
+        title = traceback.format_exception_only(type, exvalue)[0]
+        if not isinstance(title, unicode):
+            title = title.decode("latin1", "ignore")
+        msg = ''.join(traceback.format_exception(extype, exvalue, trace))
         # display the exception
         print u'Unhandled Error: %s' % title
         dlg = wx.lib.dialogs.ScrolledMessageDialog(self, msg, title)
@@ -733,10 +738,33 @@ class PyAUIFrame(aui.AuiMDIParentFrame, Web2pyMixin, PSPMixin, RepoMixin):
             else:
                 filename0 = ""
             # do not add exceptions raised by the IDE (indirectely too)
-            if not filename.startswith(INSTALL_DIR) and \
-               not filename0.startswith(INSTALL_DIR):
-                self.NotifyDefect(summary=title, type="60", filename=filename, 
+            print "extype", extype
+            if (not filename.startswith(INSTALL_DIR) and \
+               not filename0.startswith(INSTALL_DIR)) or \
+               extype not in (AssertionError, ):
+                # Automatic Error Classification (PSP Defect Type Standard):
+                defect_type_standard = {
+                    '20': (SyntaxError, ), # this should be cached by the editor
+                    '40': (NameError, LookupError, ImportError),
+                    '50': (TypeError, AttributeError),
+                    '60': (AssertionError, ), #TODO: unittest/doctests
+                    '70': (ValueError, ArithmeticError, EOFError, BufferError),
+                    '80': (RuntimeError, ),
+                    '90': (SystemError, MemoryError, ReferenceError, ),
+                    '100': (EnvironmentError, ), # TODO: libraries?
+                    }
+                # Find the related defect_type code for the exception value:
+                for k, v in defect_type_standard.items():
+                    if isinstance(exvalue, v):
+                        defect_type = k
+                        break
+                else:
+                    defect_type = '80'  # default unclassified defect type
+                self.NotifyDefect(summary=title, type=defect_type, 
+                                  filename=filename, 
                                   description="", lineno=lineno, offset=1)
+            else:
+                print "Not notified!"
 
     def NotifyRepo(self, filename, action="", status=""):
         if 'repo' in ADDONS:
