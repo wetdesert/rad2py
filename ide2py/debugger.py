@@ -18,6 +18,7 @@ import time
 import wx
 
 import qdb
+import simplejsonrpc
 
 # Define notification event for thread completion
 EVT_DEBUG_ID, EVT_READLINE_ID, EVT_WRITE_ID, EVT_EXCEPTION_ID = [wx.NewId() 
@@ -124,6 +125,9 @@ class Debugger(qdb.Frontend, Thread):
         # execute user action scheduled by main thread
         self.action()
 
+        # clean current line
+        wx.PostEvent(self.gui, DebugEvent(EVT_DEBUG_ID, (None, None)))
+
     def write(self, text):
         wx.PostEvent(self.gui, DebugEvent(EVT_WRITE_ID, text))
 
@@ -224,4 +228,15 @@ class Debugger(qdb.Frontend, Thread):
                 return self.action()
             except RPCError, e:
                 return u'*** %s' % unicode(e)
+
+
+if __name__ == '__main__':
+    import sys
+    
+    url = "http://admin:a@localhost:8000/admin/webservices/call/jsonrpc"
+    r = simplejsonrpc.ServiceProxy(url, verbose=True)
+    
+    r.start_debugger('localhost', 6000, 'secret password')
+    
+
 
