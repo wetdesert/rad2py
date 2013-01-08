@@ -43,8 +43,6 @@ class Web2pyMixin(object):
     def __init__(self, path="../web2py", port=8006, password="a"):
         "start-up a web2py server instance"
 
-        self.web2py_environment = {}
-        
         self.menu['run'].Append(ID_ATTACH, 
                                 "Attach &webserver\tCtrl-W",
                                 "Connect to remote web2py debugger")
@@ -90,7 +88,7 @@ class Web2pyMixin(object):
                     except:
                         print 'warning: unable to detect your browser'
                 
-                self.web2py_environment = self.build_web2py_environment()
+                web2py_env = self.build_web2py_environment()
 
                 if False:
                     # Start a alternate web2py in a separate thread (for blocking requests)
@@ -105,13 +103,13 @@ class Web2pyMixin(object):
                     p.start()                
                 
             except Exception, e:
-                dlg = wx.MessageDialog(self, unicode(e),
-                           'cannot start web2py!', wx.OK | wx.ICON_EXCLAMATION)
-                dlg.ShowModal()
-                dlg.Destroy()
+                self.ShowInfoBar(u"cannot start web2py!: %s" % unicode(e), 
+                                 flags=wx.ICON_ERROR, key="web2py")
+                web2py_env = {}
             finally:
                 # recover original directory
                 os.chdir(prevdir)
+            self.web2py_environment = web2py_env
 
     def OnIdleServeWeb2py(self, event):
         "If there is a request pending, serve it under debugger control"
